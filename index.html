@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Print Calculator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        #results { margin-top: 20px; padding: 15px; border: 1px solid #ddd; background: #f9f9f9; }
+        .settings { background: #f0f0f0; padding: 15px; border-radius: 5px; margin-bottom: 15px; }
+        .setting-row { margin: 8px 0; }
+        input[type="number"] { width: 80px; padding: 5px; }
+        .ink-type { display: inline-block; width: 200px; font-weight: bold; }
+        .intensity-bar { height: 15px; background: linear-gradient(to right, #f0f0f0, #000); margin: 10px 0; border-radius: 3px; }
+        .intensity-label { display: flex; justify-content: space-between; margin-top: -10px; }
+        .action-buttons { margin: 15px 0; }
+        button { padding: 8px 15px; margin-right: 10px; cursor: pointer; }
+        #analyzeBtn { background: #4CAF50; color: white; border: none; }
+        #resetBtn { background: #f44336; color: white; border: none; }
+        #saveProfileBtn { background: #2196F3; color: white; border: none; }
+        #loadProfileBtn { background: #FF9800; color: white; border: none; }
+        .progress-container { width: 100%; background-color: #ddd; margin: 15px 0; border-radius: 3px; }
+        .progress-bar { width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white; border-radius: 3px; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f2f2f2; }
+        .minimum { color: #d00; font-weight: bold; }
+        .error-message { color: #d00; padding: 10px; background: #ffebee; margin: 10px 0; border-radius: 3px; display: none; }
+        .page-preview { display: inline-block; margin: 5px; border: 1px solid #ddd; }
+        .page-preview img { max-width: 80px; height: auto; display: block; }
+        .tab-container { display: flex; margin-bottom: 15px; }
+        .tab { padding: 10px 15px; cursor: pointer; background: #e0e0e0; margin-right: 5px; border-radius: 5px 5px 0 0; }
+        .tab.active { background: #f0f0f0; font-weight: bold; }
+        .tab-content { display: none; padding: 15px; background: #f0f0f0; border-radius: 0 0 5px 5px; }
+        .tab-content.active { display: block; }
+        .profile-select { width: 200px; padding: 5px; margin-right: 10px; }
+        .performance-options { margin-top: 15px; }
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Advanced Print Calculator</h1>
+    <p><em>Pricing based on ink intensity, paper type, and size with profile saving</em></p>
+    
+    <div class="error-message" id="errorMessage"></div>
+    
+    <div class="tab-container">
+        <div class="tab active" data-tab="ink">Ink Settings</div>
+        <div class="tab" data-tab="paper">Paper Settings</div>
+        <div class="tab" data-tab="profiles">Profiles</div>
+        <div class="tab" data-tab="performance">Performance</div>
+    </div>
+    
+    <div class="tab-content active" id="ink-tab">
+        <div class="intensity-bar"></div>
+        <div class="intensity-label">
+            <span>Light</span>
+            <span>Medium</span>
+            <span>Dark</span>
+        </div>
+        
+        <h3>Black Ink Pricing</h3>
+        <div class="setting-row">
+            <span class="ink-type">Light Black (171-255):</span>
+            ₱<input type="number" id="lightBlackCost" value="1.00" step="0.01" min="0"> per ml
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Medium Black (86-170):</span>
+            ₱<input type="number" id="midBlackCost" value="2.50" step="0.01" min="0"> per ml
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Dark Black (0-85):</span>
+            ₱<input type="number" id="darkBlackCost" value="5.00" step="0.01" min="0"> per ml
+        </div>
+        
+        <h3>Colored Ink Pricing</h3>
+        <div class="setting-row">
+            <span class="ink-type">Light Color (171-255):</span>
+            ₱<input type="number" id="lightColorCost" value="7.50" step="0.01" min="0"> per ml
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Medium Color (86-170):</span>
+            ₱<input type="number" id="midColorCost" value="10.00" step="0.01" min="0"> per ml
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Dark Color (0-85):</span>
+            ₱<input type="number" id="darkColorCost" value="12.50" step="0.01" min="0"> per ml
+        </div>
+        
+        <h3>Calculation Settings</h3>
+        <div class="setting-row">
+            <span class="ink-type">Ink density:</span>
+            <input type="number" id="inkDensity" value="200000" step="10000"> pixels per ml
+            <span class="tooltip">(?)
+                <span class="tooltiptext">Higher values mean less ink used for the same coverage</span>
+            </span>
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Minimum per page:</span>
+            ₱<input type="number" id="minPerPage" value="5.00" step="0.01" min="0">
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Color detection threshold:</span>
+            <input type="number" id="colorThreshold" value="10" min="1" max="50">
+            <span class="tooltip">(?)
+                <span class="tooltiptext">Lower values detect more colors, higher values treat more as grayscale</span>
+            </span>
+        </div>
+    </div>
+    
+    <div class="tab-content" id="paper-tab">
+        <h3>Paper Settings</h3>
+        <div class="setting-row">
+            <span class="ink-type">Paper Size:</span>
+            <select id="paperSize">
+                <option value="letter">Letter (8.5 × 11 in)</option>
+                <option value="legal">Legal (8.5 × 14 in)</option>
+                <option value="tabloid">Tabloid (11 × 17 in)</option>
+                <option value="a4">A4 (210 × 297 mm)</option>
+                <option value="a3">A3 (297 × 420 mm)</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+        <div id="customSizeSettings" class="hidden">
+            <div class="setting-row">
+                <span class="ink-type">Width (in):</span>
+                <input type="number" id="customWidth" value="8.5" step="0.1" min="1">
+            </div>
+            <div class="setting-row">
+                <span class="ink-type">Height (in):</span>
+                <input type="number" id="customHeight" value="11" step="0.1" min="1">
+            </div>
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Paper Type:</span>
+            <select id="paperType">
+                <option value="standard">Standard (no extra charge)</option>
+                <option value="premium">Premium (+20%)</option>
+                <option value="glossy">Glossy (+30%)</option>
+                <option value="recycled">Recycled (+10%)</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Paper Cost per sheet:</span>
+            ₱<input type="number" id="paperCost" value="1.00" step="0.01" min="0">
+        </div>
+    </div>
+    
+    <div class="tab-content" id="profiles-tab">
+        <h3>Profile Management</h3>
+        <div class="setting-row">
+            <span class="ink-type">Profile Name:</span>
+            <input type="text" id="profileName" placeholder="Enter profile name">
+        </div>
+        <div class="action-buttons">
+            <button id="saveProfileBtn">Save Current Settings</button>
+            <button id="loadProfileBtn">Load Selected Profile</button>
+            <button id="deleteProfileBtn" style="background: #f44336;">Delete Profile</button>
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Saved Profiles:</span>
+            <select id="profileSelect" class="profile-select">
+                <option value="">Select a profile</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="tab-content" id="performance-tab">
+        <h3>Performance Options</h3>
+        <div class="setting-row">
+            <span class="ink-type">Analysis Resolution:</span>
+            <select id="analysisResolution">
+                <option value="1.0">Full (most accurate)</option>
+                <option value="0.5">Medium (balanced)</option>
+                <option value="0.25">Low (fastest)</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <span class="ink-type">Preview Resolution:</span>
+            <select id="previewResolution">
+                <option value="0.15">Low (fastest)</option>
+                <option value="0.3">Medium</option>
+                <option value="0.5">High</option>
+            </select>
+        </div>
+        <div class="setting-row performance-options">
+            <input type="checkbox" id="parallelProcessing" checked>
+            <label for="parallelProcessing">Parallel page processing (faster but uses more memory)</label>
+        </div>
+        <div class="setting-row performance-options">
+            <input type="checkbox" id="disablePreviews" >
+            <label for="disablePreviews">Disable page previews (faster analysis)</label>
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+        <input type="file" id="pdfInput" accept=".pdf" style="padding: 8px;">
+        <button id="analyzeBtn">Analyze PDF</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+    
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar">0%</div>
+    </div>
+    
+    <div id="previewContainer" style="margin: 15px 0;"></div>
+    
+    <div id="results" style="display: none;">
+        <h2>Print Job Analysis</h2>
+        <table>
+            <tr>
+                <th>Metric</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>Total Pages</td>
+                <td id="totalPages">0</td>
+            </tr>
+            <tr>
+                <td>Paper Size</td>
+                <td id="paperSizeDisplay">Letter (8.5 × 11 in)</td>
+            </tr>
+            <tr>
+                <td>Paper Type</td>
+                <td id="paperTypeDisplay">Standard</td>
+            </tr>
+            
+            <tr><td colspan="2" style="font-weight:bold;background:#eee;">Black Ink Usage</td></tr>
+            <tr>
+                <td>Light Black (171-255)</td>
+                <td id="lightBlackDisplay">0 ml (₱0.00)</td>
+            </tr>
+            <tr>
+                <td>Medium Black (86-170)</td>
+                <td id="midBlackDisplay">0 ml (₱0.00)</td>
+            </tr>
+            <tr>
+                <td>Dark Black (0-85)</td>
+                <td id="darkBlackDisplay">0 ml (₱0.00)</td>
+            </tr>
+            
+            <tr><td colspan="2" style="font-weight:bold;background:#eee;">Colored Ink Usage</td></tr>
+            <tr>
+                <td>Light Color (171-255)</td>
+                <td id="lightColorDisplay">0 ml (₱0.00)</td>
+            </tr>
+            <tr>
+                <td>Medium Color (86-170)</td>
+                <td id="midColorDisplay">0 ml (₱0.00)</td>
+            </tr>
+            <tr>
+                <td>Dark Color (0-85)</td>
+                <td id="darkColorDisplay">0 ml (₱0.00)</td>
+            </tr>
+            
+            <tr>
+                <td>Total Ink Cost</td>
+                <td id="totalInkCost">₱0.00</td>
+            </tr>
+            <tr>
+                <td>Paper Cost</td>
+                <td id="paperCostDisplay">₱0.00</td>
+            </tr>
+            <tr class="minimum">
+                <td>Minimum Charge</td>
+                <td id="minimumCharge">₱0.00</td>
+            </tr>
+            <tr style="font-weight: bold; font-size: 1.1em;">
+                <td>Total Charge</td>
+                <td id="totalCharge">₱0.00</td>
+            </tr>
+        </table>
+        
+        <h3>Per-Page Breakdown</h3>
+        <div style="max-height: 300px; overflow-y: auto;">
+            <table id="pageBreakdown">
+                <tr>
+                    <th>Page</th>
+                    <th>Light B</th>
+                    <th>Medium B</th>
+                    <th>Dark B</th>
+                    <th>Light C</th>
+                    <th>Medium C</th>
+                    <th>Dark C</th>
+                    <th>Cost</th>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentPDF = null;
+        let currentPageData = [];
+        const PROFILE_KEY = 'printCalculatorProfiles';
+        
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js';
+
+        // DOM Ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Tab switching
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    this.classList.add('active');
+                    document.getElementById(this.dataset.tab + '-tab').classList.add('active');
+                });
+            });
+            
+            // Paper size change handler
+            document.getElementById('paperSize').addEventListener('change', function() {
+                document.getElementById('customSizeSettings').classList.toggle('hidden', this.value !== 'custom');
+            });
+            
+            // Profile management
+            document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
+            document.getElementById('loadProfileBtn').addEventListener('click', loadProfile);
+            document.getElementById('deleteProfileBtn').addEventListener('click', deleteProfile);
+            loadProfileList();
+            
+            // File input handler
+            document.getElementById('pdfInput').addEventListener('change', handleFileInput);
+            
+            // Analyze button handler
+            document.getElementById('analyzeBtn').addEventListener('click', function() {
+                if (currentPDF) {
+                    document.body.style.cursor = 'wait';
+                    analyzePDF(currentPDF);
+                } else {
+                    showError("Please upload a PDF first");
+                }
+            });
+            
+            // Reset button handler
+            document.getElementById('resetBtn').addEventListener('click', function() {
+                if (confirm("Are you sure you want to reset everything?")) {
+                    location.reload();
+                }
+            });
+        });
+        
+        // Handle file input
+        function handleFileInput(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none';
+            document.body.style.cursor = 'wait';
+            document.getElementById('previewContainer').innerHTML = '';
+            
+            const fileReader = new FileReader();
+            fileReader.onload = function() {
+                try {
+                    currentPDF = new Uint8Array(this.result);
+                } catch (error) {
+                    showError("Failed to process PDF: " + error.message);
+                }
+            };
+            fileReader.onerror = function() {
+                showError("Error reading file. Please try again.");
+            };
+            fileReader.readAsArrayBuffer(file);
+        }
+        
+        // Show error message
+        function showError(message) {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            document.body.style.cursor = 'default';
+            updateProgress(0, '');
+        }
+        
+        // Update progress bar
+        function updateProgress(percent, message = '') {
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = message || (percent + '%');
+        }
+        
+        // Save current settings as a profile
+        function saveProfile() {
+            const profileName = document.getElementById('profileName').value.trim();
+            if (!profileName) {
+                showError("Please enter a profile name");
+                return;
+            }
+            
+            const settings = {
+                ink: {
+                    lightBlackCost: document.getElementById('lightBlackCost').value,
+                    midBlackCost: document.getElementById('midBlackCost').value,
+                    darkBlackCost: document.getElementById('darkBlackCost').value,
+                    lightColorCost: document.getElementById('lightColorCost').value,
+                    midColorCost: document.getElementById('midColorCost').value,
+                    darkColorCost: document.getElementById('darkColorCost').value,
+                    inkDensity: document.getElementById('inkDensity').value,
+                    minPerPage: document.getElementById('minPerPage').value,
+                    colorThreshold: document.getElementById('colorThreshold').value
+                },
+                paper: {
+                    paperSize: document.getElementById('paperSize').value,
+                    customWidth: document.getElementById('customWidth').value,
+                    customHeight: document.getElementById('customHeight').value,
+                    paperType: document.getElementById('paperType').value,
+                    paperCost: document.getElementById('paperCost').value
+                },
+                performance: {
+                    analysisResolution: document.getElementById('analysisResolution').value,
+                    previewResolution: document.getElementById('previewResolution').value,
+                    parallelProcessing: document.getElementById('parallelProcessing').checked,
+                    disablePreviews: document.getElementById('disablePreviews').checked
+                }
+            };
+            
+            let profiles = JSON.parse(localStorage.getItem(PROFILE_KEY)) || {};
+            profiles[profileName] = settings;
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles));
+            
+            loadProfileList();
+            document.getElementById('profileName').value = '';
+            alert(`Profile "${profileName}" saved successfully`);
+        }
+        
+        // Load profile list into dropdown
+        function loadProfileList() {
+            const profileSelect = document.getElementById('profileSelect');
+            profileSelect.innerHTML = '<option value="">Select a profile</option>';
+            
+            const profiles = JSON.parse(localStorage.getItem(PROFILE_KEY)) || {};
+            for (const name in profiles) {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                profileSelect.appendChild(option);
+            }
+        }
+        
+        // Load selected profile
+        function loadProfile() {
+            const profileName = document.getElementById('profileSelect').value;
+            if (!profileName) {
+                showError("Please select a profile to load");
+                return;
+            }
+            
+            const profiles = JSON.parse(localStorage.getItem(PROFILE_KEY)) || {};
+            const profile = profiles[profileName];
+            if (!profile) {
+                showError("Selected profile not found");
+                return;
+            }
+            
+            // Load ink settings
+            document.getElementById('lightBlackCost').value = profile.ink.lightBlackCost;
+            document.getElementById('midBlackCost').value = profile.ink.midBlackCost;
+            document.getElementById('darkBlackCost').value = profile.ink.darkBlackCost;
+            document.getElementById('lightColorCost').value = profile.ink.lightColorCost;
+            document.getElementById('midColorCost').value = profile.ink.midColorCost;
+            document.getElementById('darkColorCost').value = profile.ink.darkColorCost;
+            document.getElementById('inkDensity').value = profile.ink.inkDensity;
+            document.getElementById('minPerPage').value = profile.ink.minPerPage;
+            document.getElementById('colorThreshold').value = profile.ink.colorThreshold;
+            
+            // Load paper settings
+            document.getElementById('paperSize').value = profile.paper.paperSize;
+            document.getElementById('customWidth').value = profile.paper.customWidth;
+            document.getElementById('customHeight').value = profile.paper.customHeight;
+            document.getElementById('paperType').value = profile.paper.paperType;
+            document.getElementById('paperCost').value = profile.paper.paperCost;
+            document.getElementById('customSizeSettings').classList.toggle('hidden', profile.paper.paperSize !== 'custom');
+            
+            // Load performance settings
+            document.getElementById('analysisResolution').value = profile.performance.analysisResolution;
+            document.getElementById('previewResolution').value = profile.performance.previewResolution;
+            document.getElementById('parallelProcessing').checked = profile.performance.parallelProcessing;
+            document.getElementById('disablePreviews').checked = profile.performance.disablePreviews;
+            
+            alert(`Profile "${profileName}" loaded successfully`);
+        }
+        
+        // Delete selected profile
+        function deleteProfile() {
+            const profileName = document.getElementById('profileSelect').value;
+            if (!profileName) {
+                showError("Please select a profile to delete");
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to delete the profile "${profileName}"?`)) {
+                return;
+            }
+            
+            const profiles = JSON.parse(localStorage.getItem(PROFILE_KEY)) || {};
+            delete profiles[profileName];
+            localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles));
+            
+            loadProfileList();
+            alert(`Profile "${profileName}" deleted successfully`);
+        }
+        
+        // Main analysis function with performance improvements
+        async function analyzePDF(data) {
+            try {
+                updateProgress(0, 'Loading PDF...');
+                const pdf = await pdfjsLib.getDocument(data).promise;
+                currentPageData = [];
+                
+                const totalPages = pdf.numPages;
+                let processedPages = 0;
+                
+                // Get settings
+                const disablePreviews = document.getElementById('disablePreviews').checked;
+                const previewResolution = parseFloat(document.getElementById('previewResolution').value);
+                const analysisResolution = parseFloat(document.getElementById('analysisResolution').value);
+                const parallelProcessing = document.getElementById('parallelProcessing').checked;
+                
+                // Create previews if not disabled
+                if (!disablePreviews) {
+                    for (let i = 1; i <= totalPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const viewport = page.getViewport({ scale: previewResolution });
+                        
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        
+                        await page.render({
+                            canvasContext: context,
+                            viewport: viewport
+                        }).promise;
+                        
+                        const previewDiv = document.createElement('div');
+                        previewDiv.className = 'page-preview';
+                        previewDiv.innerHTML = `<div>Page ${i}</div>`;
+                        canvas.toBlob(function(blob) {
+                            const img = document.createElement('img');
+                            img.src = URL.createObjectURL(blob);
+                            previewDiv.appendChild(img);
+                        });
+                        document.getElementById('previewContainer').appendChild(previewDiv);
+                    }
+                }
+                
+                // Process pages for analysis
+                if (parallelProcessing) {
+                    // Process pages in parallel (faster but uses more memory)
+                    const pagePromises = [];
+                    for (let i = 1; i <= totalPages; i++) {
+                        pagePromises.push(processPage(pdf, i, analysisResolution, totalPages));
+                    }
+                    
+                    const results = await Promise.all(pagePromises);
+                    currentPageData = results;
+                    processedPages = totalPages;
+                } else {
+                    // Process pages sequentially (slower but uses less memory)
+                    for (let i = 1; i <= totalPages; i++) {
+                        updateProgress((i-1)/totalPages * 100, `Analyzing page ${i}...`);
+                        const pageData = await processPage(pdf, i, analysisResolution, totalPages);
+                        currentPageData.push(pageData);
+                        processedPages++;
+                        updateProgress(processedPages/totalPages * 100, `Analyzed ${processedPages}/${totalPages}`);
+                    }
+                }
+                
+                calculateCosts();
+                document.getElementById('results').style.display = 'block';
+                updateProgress(100, 'Analysis complete');
+                setTimeout(() => updateProgress(0, ''), 2000);
+                document.body.style.cursor = 'default';
+            } catch (error) {
+                showError("PDF processing error: " + error.message);
+                document.body.style.cursor = 'default';
+                updateProgress(0, '');
+            }
+        }
+        
+        // Process individual page
+        async function processPage(pdf, pageNum, resolution, totalPages) {
+            try {
+                const page = await pdf.getPage(pageNum);
+                const viewport = page.getViewport({ scale: resolution });
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport,
+                    imageSmoothingEnabled: false
+                }).promise;
+                
+                return {
+                    imageData: context.getImageData(0, 0, canvas.width, canvas.height).data,
+                    width: canvas.width,
+                    height: canvas.height
+                };
+            } catch (error) {
+                console.error(`Error processing page ${pageNum}:`, error);
+                return {
+                    imageData: new Uint8ClampedArray(0),
+                    width: 0,
+                    height: 0
+                };
+            }
+        }
+        
+        // Calculate costs based on ink intensity and paper settings
+        function calculateCosts() {
+            // Get pricing settings
+            const lightBlackCost = parseFloat(document.getElementById('lightBlackCost').value);
+            const midBlackCost = parseFloat(document.getElementById('midBlackCost').value);
+            const darkBlackCost = parseFloat(document.getElementById('darkBlackCost').value);
+            const lightColorCost = parseFloat(document.getElementById('lightColorCost').value);
+            const midColorCost = parseFloat(document.getElementById('midColorCost').value);
+            const darkColorCost = parseFloat(document.getElementById('darkColorCost').value);
+            const density = parseInt(document.getElementById('inkDensity').value);
+            const minPerPage = parseFloat(document.getElementById('minPerPage').value);
+            const colorThreshold = parseInt(document.getElementById('colorThreshold').value);
+            
+            // Get paper settings
+            const paperSize = document.getElementById('paperSize').value;
+            const paperType = document.getElementById('paperType').value;
+            const basePaperCost = parseFloat(document.getElementById('paperCost').value);
+            
+            // Calculate paper cost multiplier
+            let paperMultiplier = 1.0;
+            switch (paperType) {
+                case 'premium': paperMultiplier = 1.2; break;
+                case 'glossy': paperMultiplier = 1.3; break;
+                case 'recycled': paperMultiplier = 1.1; break;
+            }
+            
+            const pageCount = currentPageData.length;
+            const minCharge = minPerPage * pageCount;
+            const totalPaperCost = basePaperCost * paperMultiplier * pageCount;
+            
+            // Update paper info display
+            document.getElementById('paperSizeDisplay').textContent = 
+                document.querySelector(`#paperSize option[value="${paperSize}"]`).textContent;
+            document.getElementById('paperTypeDisplay').textContent = 
+                document.querySelector(`#paperType option[value="${paperType}"]`).textContent;
+            document.getElementById('paperCostDisplay').textContent = '₱' + totalPaperCost.toFixed(2);
+            
+            // Initialize counters
+            let lightBlackPx = 0, midBlackPx = 0, darkBlackPx = 0;
+            let lightColorPx = 0, midColorPx = 0, darkColorPx = 0;
+            
+            // Clear previous breakdown
+            const breakdownTable = document.getElementById('pageBreakdown');
+            while (breakdownTable.rows.length > 1) {
+                breakdownTable.deleteRow(1);
+            }
+            
+            // Process each page
+            currentPageData.forEach((page, pageIndex) => {
+                const counts = countInkPixels(page.imageData, colorThreshold);
+                
+                // Accumulate totals
+                lightBlackPx += counts.lightBlack;
+                midBlackPx += counts.midBlack;
+                darkBlackPx += counts.darkBlack;
+                lightColorPx += counts.lightColor;
+                midColorPx += counts.midColor;
+                darkColorPx += counts.darkColor;
+                
+                // Calculate page cost
+                const pageInkCost = 
+                    (counts.lightBlack/density * lightBlackCost) + 
+                    (counts.midBlack/density * midBlackCost) + 
+                    (counts.darkBlack/density * darkBlackCost) +
+                    (counts.lightColor/density * lightColorCost) +
+                    (counts.midColor/density * midColorCost) +
+                    (counts.darkColor/density * darkColorCost);
+                
+                const pagePaperCost = basePaperCost * paperMultiplier;
+                const pageCharge = Math.max(pageInkCost + pagePaperCost, minPerPage);
+                
+                // Add to breakdown table
+                const row = breakdownTable.insertRow();
+                row.insertCell().textContent = pageIndex + 1;
+                row.insertCell().textContent = counts.lightBlack.toLocaleString();
+                row.insertCell().textContent = counts.midBlack.toLocaleString();
+                row.insertCell().textContent = counts.darkBlack.toLocaleString();
+                row.insertCell().textContent = counts.lightColor.toLocaleString();
+                row.insertCell().textContent = counts.midColor.toLocaleString();
+                row.insertCell().textContent = counts.darkColor.toLocaleString();
+                row.insertCell().textContent = '₱' + pageCharge.toFixed(2);
+            });
+            
+            // Calculate totals in ml
+            const lightBlackML = lightBlackPx / density;
+            const midBlackML = midBlackPx / density;
+            const darkBlackML = darkBlackPx / density;
+            const lightColorML = lightColorPx / density;
+            const midColorML = midColorPx / density;
+            const darkColorML = darkColorPx / density;
+            
+            // Calculate costs
+            const lightBlackPrice = lightBlackML * lightBlackCost;
+            const midBlackPrice = midBlackML * midBlackCost;
+            const darkBlackPrice = darkBlackML * darkBlackCost;
+            const lightColorPrice = lightColorML * lightColorCost;
+            const midColorPrice = midColorML * midColorCost;
+            const darkColorPrice = darkColorML * darkColorCost;
+            
+            const totalInkCost = lightBlackPrice + midBlackPrice + darkBlackPrice + 
+                               lightColorPrice + midColorPrice + darkColorPrice;
+            const totalCharge = Math.max(totalInkCost + totalPaperCost, minCharge);
+            
+            // Update display
+            document.getElementById('totalPages').textContent = pageCount;
+            
+            document.getElementById('lightBlackDisplay').textContent = 
+                `${lightBlackML.toFixed(2)} ml (₱${lightBlackPrice.toFixed(2)})`;
+            document.getElementById('midBlackDisplay').textContent = 
+                `${midBlackML.toFixed(2)} ml (₱${midBlackPrice.toFixed(2)})`;
+            document.getElementById('darkBlackDisplay').textContent = 
+                `${darkBlackML.toFixed(2)} ml (₱${darkBlackPrice.toFixed(2)})`;
+            
+            document.getElementById('lightColorDisplay').textContent = 
+                `${lightColorML.toFixed(2)} ml (₱${lightColorPrice.toFixed(2)})`;
+            document.getElementById('midColorDisplay').textContent = 
+                `${midColorML.toFixed(2)} ml (₱${midColorPrice.toFixed(2)})`;
+            document.getElementById('darkColorDisplay').textContent = 
+                `${darkColorML.toFixed(2)} ml (₱${darkColorPrice.toFixed(2)})`;
+            
+            document.getElementById('totalInkCost').textContent = `₱${totalInkCost.toFixed(2)}`;
+            document.getElementById('minimumCharge').textContent = `₱${minCharge.toFixed(2)}`;
+            document.getElementById('totalCharge').textContent = `₱${totalCharge.toFixed(2)}`;
+        }
+        
+        // Pixel counting function with improved color detection
+        function countInkPixels(imageData, colorThreshold = 10) {
+            let lightBlack = 0;   // 171-255 (lightest)
+            let midBlack = 0;     // 86-170
+            let darkBlack = 0;    // 0-85 (darkest)
+            
+            let lightColor = 0;   // 171-255 (lightest)
+            let midColor = 0;     // 86-170
+            let darkColor = 0;    // 0-85 (darkest)
+            
+            // Calculate colorfulness threshold squared (for faster comparison)
+            const thresholdSquared = colorThreshold * colorThreshold;
+            
+            for (let i = 0; i < imageData.length; i += 4) {
+                const r = imageData[i];
+                const g = imageData[i+1];
+                const b = imageData[i+2];
+                
+                // Skip white pixels (RGB all > 250)
+                if (r > 250 && g > 250 && b > 250) continue;
+                
+                // Calculate intensity (darkness) - average of RGB
+                const intensity = 255 - Math.round((r + g + b) / 3);
+                
+                // Improved color detection using Euclidean distance in RGB space
+                const rgDiff = r - g;
+                const gbDiff = g - b;
+                const brDiff = b - r;
+                const colorfulness = rgDiff*rgDiff + gbDiff*gbDiff + brDiff*brDiff;
+                
+                // Determine if black (grayscale) or color
+                const isBlack = (colorfulness < thresholdSquared);
+                
+                // Categorize by intensity
+                if (isBlack) {
+                    if (intensity <= 85) lightBlack++;
+                    else if (intensity <= 170) midBlack++;
+                    else darkBlack++;
+                } else {
+                    if (intensity <= 85) lightColor++;
+                    else if (intensity <= 170) midColor++;
+                    else darkColor++;
+                }
+            }
+            
+            return { lightBlack, midBlack, darkBlack, lightColor, midColor, darkColor };
+        }
+    </script>
+</body>
+</html>
